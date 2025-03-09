@@ -15,7 +15,10 @@ interface Pedido {
   metodo_pago: string;
   total: number;
   estado: string;
-  fecha: string; // Nueva columna
+  fecha: string;
+  tipo_entrega: 'A domicilio' | 'Pasar a recoger';
+  direccion: string | null;
+  telefono: string | null;
   detalle_pedido: {
     id: number;
     cantidad: number;
@@ -35,7 +38,6 @@ const VentasTotales: React.FC = () => {
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
-  // Cargar pedidos completados del día actual al montar el componente
   useEffect(() => {
     const fetchVentas = async () => {
       const { data, error } = await supabase
@@ -47,6 +49,9 @@ const VentasTotales: React.FC = () => {
           total,
           estado,
           fecha,
+          tipo_entrega,
+          direccion,
+          telefono,
           cliente (
             id,
             nombre,
@@ -64,8 +69,8 @@ const VentasTotales: React.FC = () => {
           )
         `)
         .eq('estado', 'Completado')
-        .eq('fecha', new Date().toISOString().split('T')[0]) // Filtrar por fecha del día actual
-        .order('id', { ascending: false }); // Más recientes primero
+        .eq('fecha', new Date().toISOString().split('T')[0])
+        .order('id', { ascending: false });
 
       if (error) {
         setError('Error al cargar las ventas: ' + error.message);
@@ -74,17 +79,14 @@ const VentasTotales: React.FC = () => {
 
       const pedidosCompletados = data || [];
       setPedidos(pedidosCompletados);
-
-      // Calcular total de ventas del día
       const total = pedidosCompletados.reduce((sum, pedido) => sum + pedido.total, 0);
       setTotalVentas(total);
     };
 
     fetchVentas();
-    window.scrollTo(0, 0); // Esto asegura que la página siempre empiece desde la parte superior
+    window.scrollTo(0, 0);
   }, []);
 
-  // Función para cerrar el día
   const handleCerrarDia = async () => {
     const confirmCerrar = window.confirm(
       '¿Estás seguro de cerrar el día? Esto moverá los pedidos completados al historial y reiniciará el total a 0.'
@@ -98,7 +100,7 @@ const VentasTotales: React.FC = () => {
     // 1. Obtener los pedidos completados del día actual
     const { data: pedidosDelDia, error: fetchError } = await supabase
       .from('pedido')
-      .select('*')
+      .select('id, codigo, cliente_id, metodo_pago, total, estado, fecha, tipo_entrega, direccion, telefono')
       .eq('estado', 'Completado')
       .eq('fecha', new Date().toISOString().split('T')[0]);
 
@@ -107,18 +109,32 @@ const VentasTotales: React.FC = () => {
       return;
     }
 
-    if (pedidosDelDia.length === 0) {
+    if (!pedidosDelDia || pedidosDelDia.length === 0) {
       setSuccess('No hay pedidos completados para cerrar hoy.');
       return;
     }
 
     // 2. Insertar los pedidos en la tabla historial
+    const pedidosParaHistorial = pedidosDelDia.map((pedido) => ({
+      id: pedido.id,
+      codigo: pedido.codigo,
+      cliente_id: pedido.cliente_id,
+      metodo_pago: pedido.metodo_pago,
+      total: pedido.total,
+      estado: pedido.estado,
+      fecha: pedido.fecha,
+      tipo_entrega: pedido.tipo_entrega,
+      direccion: pedido.direccion,
+      telefono: pedido.telefono,
+    }));
+
     const { error: insertError } = await supabase
       .from('pedido_historial')
-      .insert(pedidosDelDia);
+      .insert(pedidosParaHistorial);
 
     if (insertError) {
       setError('Error al mover los pedidos al historial: ' + insertError.message);
+      console.log('Error completo:', insertError); // Depuración
       return;
     }
 
@@ -138,12 +154,12 @@ const VentasTotales: React.FC = () => {
     setPedidos([]);
     setTotalVentas(0);
     setSuccess('Día cerrado exitosamente. Total reiniciado a 0.');
+    window.scrollTo(0, 0);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-purple-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        {/* Botón para volver al Home */}
         <button
           onClick={() => navigate('/HomeAdmin')}
           className="mb-6 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition"
@@ -157,7 +173,6 @@ const VentasTotales: React.FC = () => {
         {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
         {success && <p className="text-green-500 text-sm mb-4 text-center">{success}</p>}
 
-        {/* Total de ventas */}
         <div className="bg-white p-6 rounded-xl shadow-xl mb-8">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold text-gray-700 flex items-center gap-2">
@@ -175,7 +190,6 @@ const VentasTotales: React.FC = () => {
           </p>
         </div>
 
-        {/* Lista de pedidos completados */}
         <div className="bg-white p-6 rounded-xl shadow-xl">
           <h3 className="text-xl font-semibold text-gray-700 mb-4">
             Pedidos Completados ({pedidos.length})
@@ -200,6 +214,19 @@ const VentasTotales: React.FC = () => {
                       <p className="text-sm text-gray-600">
                         Cliente: {pedido.cliente.correo}
                       </p>
+                      <p className="text-sm text-gray-600">
+                        Tipo de Entrega: {pedido.tipo_entrega}
+                      </p>
+                      {pedido.tipo_entrega === 'A domicilio' && (
+                        <>
+                          <p className="text-sm text-gray-600">
+                            Dirección: {pedido.direccion}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Teléfono: {pedido.telefono}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <p className="text-lg font-bold text-green-600">
                       ${pedido.total.toFixed(2)}

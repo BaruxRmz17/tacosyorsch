@@ -3,18 +3,46 @@ import { useNavigate } from 'react-router-dom';
 import supabase from '../services/supabase'; // Ajusta la ruta según tu estructura
 import { ShoppingCart, CheckCircle } from 'lucide-react';
 
+interface DetallePedido {
+  id: number;
+  cantidad: number;
+  producto: {
+    id: number;
+    nombre: string;
+    precio: number;
+    categoria: string;
+  };
+}
+
+interface Pedido {
+  id: number;
+  codigo: string;
+  metodo_pago: string;
+  total: number;
+  estado: string;
+  tipo_entrega: 'A domicilio' | 'Pasar a recoger';
+  direccion: string | null;
+  telefono: string | null;
+  cliente: {
+    id: number;
+    nombre: string;
+    correo: string;
+  };
+  detalle_pedido: DetallePedido[];
+}
+
 const PedidoAdmin: React.FC = () => {
   const [codigo, setCodigo] = useState('');
-  const [pedido, setPedido] = useState(null);
+  const [pedido, setPedido] = useState<Pedido | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
-    window.scrollTo(0, 0); // Hace scroll al inicio cuando se carga la página
+    window.scrollTo(0, 0);
   }, []);
 
-  const handleSearch = async (e) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
@@ -33,6 +61,9 @@ const PedidoAdmin: React.FC = () => {
         metodo_pago,
         total,
         estado,
+        tipo_entrega,
+        direccion,
+        telefono,
         cliente (
           id,
           nombre,
@@ -41,6 +72,7 @@ const PedidoAdmin: React.FC = () => {
         detalle_pedido (
           id,
           cantidad,
+          comentario,
           producto (
             id,
             nombre,
@@ -49,10 +81,16 @@ const PedidoAdmin: React.FC = () => {
           )
         )
       `)
-      .eq('codigo', codigo)
+      .eq('codigo', codigo.trim().toUpperCase()) // Normalizamos el código
       .single();
 
-    if (fetchError || !data) {
+    if (fetchError) {
+      console.log('Error completo:', fetchError); // Depuración
+      setError('No se encontró un pedido con ese código o hubo un error: ' + fetchError.message);
+      return;
+    }
+
+    if (!data) {
       setError('No se encontró un pedido con ese código.');
       return;
     }
@@ -69,7 +107,8 @@ const PedidoAdmin: React.FC = () => {
     };
 
     setPedido(pedidoMapeado);
-    window.scrollTo(0, 0); // Hace scroll al inicio al cargar los datos
+    setSuccess('Pedido encontrado exitosamente.');
+    window.scrollTo(0, 0);
   };
 
   const handleFinalize = async () => {
@@ -90,7 +129,7 @@ const PedidoAdmin: React.FC = () => {
 
     setSuccess('Pedido finalizado exitosamente.');
     setPedido({ ...pedido, estado: 'Completado' });
-    window.scrollTo(0, 0); // Hace scroll al inicio tras finalizar el pedido
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -129,6 +168,64 @@ const PedidoAdmin: React.FC = () => {
             </button>
           </form>
         </div>
+
+        {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
+        {success && <p className="text-green-500 text-sm mb-4 text-center">{success}</p>}
+
+        {pedido && (
+          <div className="bg-white p-6 rounded-xl shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-700 mb-4 flex items-center gap-2">
+              <ShoppingCart size={24} /> Detalles del Pedido #{pedido.codigo}
+            </h3>
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                <strong>Cliente:</strong> {pedido.cliente.nombre} ({pedido.cliente.correo})
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Método de Pago:</strong> {pedido.metodo_pago}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Tipo de Entrega:</strong> {pedido.tipo_entrega}
+              </p>
+              {pedido.tipo_entrega === 'A domicilio' && (
+                <>
+                  <p className="text-sm text-gray-600">
+                    <strong>Dirección:</strong> {pedido.direccion}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    <strong>Teléfono:</strong> {pedido.telefono}
+                  </p>
+                </>
+              )}
+              <p className="text-sm text-gray-600">
+                <strong>Estado:</strong> {pedido.estado}
+              </p>
+              <p className="text-sm text-gray-600">
+                <strong>Total:</strong> ${pedido.total.toFixed(2)}
+              </p>
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Productos:</p>
+                <ul className="text-sm text-gray-600 list-disc pl-5">
+                  {pedido.detalle_pedido.map((detalle) => (
+                    <li key={detalle.id} className="mt-1">
+                      {detalle.producto.nombre} ({detalle.producto.categoria}) x
+                      {detalle.cantidad} - $
+                      {(detalle.producto.precio * detalle.cantidad).toFixed(2)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {pedido.estado === 'Pendiente' && (
+                <button
+                  onClick={handleFinalize}
+                  className="mt-4 flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-green-700 transition"
+                >
+                  <CheckCircle size={20} /> Finalizar Pedido
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -27,6 +27,9 @@ interface Pedido {
   metodo_pago: string;
   total: number;
   estado: string;
+  tipo_entrega: 'A domicilio' | 'Pasar a recoger'; // Nuevo campo
+  direccion: string | null; // Nuevo campo
+  telefono: string | null; // Nuevo campo
   detalle_pedido: DetallePedido[];
 }
 
@@ -36,7 +39,6 @@ const VerPedidos: React.FC = () => {
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
-  // Cargar pedidos en curso (solo "Pendiente") al montar el componente
   useEffect(() => {
     const fetchPedidos = async () => {
       const { data, error } = await supabase
@@ -47,6 +49,9 @@ const VerPedidos: React.FC = () => {
           metodo_pago,
           total,
           estado,
+          tipo_entrega,
+          direccion,
+          telefono,
           cliente (
             id,
             nombre,
@@ -88,10 +93,9 @@ const VerPedidos: React.FC = () => {
     };
 
     fetchPedidos();
-    window.scrollTo(0, 0); // Esto asegura que la página siempre empiece desde la parte superior
+    window.scrollTo(0, 0);
   }, []);
 
-  // Eliminar pedido
   const handleDelete = async (pedidoId: number, pedidoCodigo: string) => {
     const confirmDelete = window.confirm(
       `¿Estás seguro de que quieres eliminar el pedido #${pedidoCodigo}? Esta acción no se puede deshacer.`
@@ -119,7 +123,6 @@ const VerPedidos: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-100 via-white to-purple-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto">
-        {/* Botón para volver al Home */}
         <button
           onClick={() => navigate('/HomeAdmin')}
           className="mb-6 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition"
@@ -133,7 +136,6 @@ const VerPedidos: React.FC = () => {
         {error && <p className="text-red-500 text-sm mb-4 text-center">{error}</p>}
         {success && <p className="text-green-500 text-sm mb-4 text-center">{success}</p>}
 
-        {/* Lista de pedidos pendientes */}
         <div className="bg-white p-6 rounded-xl shadow-xl">
           {pedidos.length === 0 ? (
             <p className="text-gray-500 text-center">No hay pedidos en curso.</p>
@@ -155,6 +157,19 @@ const VerPedidos: React.FC = () => {
                       <p className="text-sm text-gray-600">
                         Método de Pago: {pedido.metodo_pago}
                       </p>
+                      <p className="text-sm text-gray-600">
+                        Tipo de Entrega: {pedido.tipo_entrega}
+                      </p>
+                      {pedido.tipo_entrega === 'A domicilio' && (
+                        <>
+                          <p className="text-sm text-gray-600">
+                            Dirección: {pedido.direccion}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Teléfono: {pedido.telefono}
+                          </p>
+                        </>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-indigo-900">

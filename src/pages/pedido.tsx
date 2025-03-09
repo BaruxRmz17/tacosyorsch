@@ -34,11 +34,13 @@ const HacerPedido: React.FC = () => {
   const [metodoPagoInfo, setMetodoPagoInfo] = useState<MetodoPago | null>(null);
   const [nombreCliente, setNombreCliente] = useState('');
   const [correoCliente, setCorreoCliente] = useState('');
+  const [tipoEntrega, setTipoEntrega] = useState<'A domicilio' | 'Pasar a recoger' | ''>('');
+  const [direccion, setDireccion] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
-  // Cargar productos y categorías al montar el componente
   useEffect(() => {
     const fetchProductos = async () => {
       const { data, error } = await supabase
@@ -52,7 +54,6 @@ const HacerPedido: React.FC = () => {
         return;
       }
 
-      // Mapear categorías para mostrar "Comida" y "Bebidas"
       const productosMapeados = (data || []).map((producto) => ({
         ...producto,
         categoria: producto.categoria === 'General' ? 'Comida' : 'Bebidas',
@@ -67,10 +68,9 @@ const HacerPedido: React.FC = () => {
     };
 
     fetchProductos();
-    window.scrollTo(0, 0); // Esto asegura que la página siempre empiece desde la parte superior
+    window.scrollTo(0, 0);
   }, []);
 
-  // Cargar información de transferencia cuando se selecciona
   useEffect(() => {
     const fetchMetodoPago = async () => {
       if (metodoPago === 'Transferencia') {
@@ -93,13 +93,11 @@ const HacerPedido: React.FC = () => {
     fetchMetodoPago();
   }, [metodoPago]);
 
-  // Filtrar productos por categoría
   const productosFiltrados =
     filtroCategoria === 'Todas'
       ? productos
       : productos.filter((producto) => producto.categoria === filtroCategoria);
 
-  // Agregar producto al carrito con comentario vacío por defecto
   const agregarAlCarrito = (producto: Producto) => {
     const existe = carrito.find((item) => item.producto.id === producto.id);
     if (existe) {
@@ -115,12 +113,10 @@ const HacerPedido: React.FC = () => {
     }
   };
 
-  // Eliminar producto del carrito
   const eliminarDelCarrito = (productoId: number) => {
     setCarrito(carrito.filter((item) => item.producto.id !== productoId));
   };
 
-  // Cambiar cantidad en el carrito
   const cambiarCantidad = (productoId: number, nuevaCantidad: string) => {
     const cantidad = parseInt(nuevaCantidad);
     if (cantidad >= 1) {
@@ -134,7 +130,6 @@ const HacerPedido: React.FC = () => {
     }
   };
 
-  // Cambiar comentario en el carrito
   const cambiarComentario = (productoId: number, comentario: string) => {
     setCarrito(
       carrito.map((item) =>
@@ -143,7 +138,6 @@ const HacerPedido: React.FC = () => {
     );
   };
 
-  // Calcular total
   const calcularTotal = () => {
     return carrito.reduce(
       (total, item) => total + item.producto.precio * item.cantidad,
@@ -151,12 +145,10 @@ const HacerPedido: React.FC = () => {
     );
   };
 
-  // Generar código único de 6 caracteres
   const generarCodigo = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
 
-  // Enviar pedido
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -168,6 +160,14 @@ const HacerPedido: React.FC = () => {
     }
     if (!metodoPago) {
       setError('Por favor, selecciona un método de pago.');
+      return;
+    }
+    if (!tipoEntrega) {
+      setError('Por favor, selecciona si es a domicilio o pasar a recoger.');
+      return;
+    }
+    if (tipoEntrega === 'A domicilio' && (!direccion || !telefono)) {
+      setError('Por favor, ingresa la dirección y el número de teléfono para entrega a domicilio.');
       return;
     }
     if (carrito.length === 0) {
@@ -204,18 +204,21 @@ const HacerPedido: React.FC = () => {
       clienteId = nuevoCliente.id;
     }
 
-    // 2. Insertar pedido
+    // 2. Insertar pedido con tipo de entrega, dirección y teléfono
     const total = calcularTotal();
     const codigo = generarCodigo();
     const { data: pedidoData, error: pedidoError } = await supabase
       .from('pedido')
       .insert({
         codigo,
-        cliente_id: clienteId, // Ajustado a tu esquema
+        cliente_id: clienteId,
         metodo_pago: metodoPago,
         total,
         estado: 'Pendiente',
-        fecha: new Date().toISOString().split('T')[0], // Añadida la fecha
+        fecha: new Date().toISOString().split('T')[0],
+        tipo_entrega: tipoEntrega,
+        direccion: tipoEntrega === 'A domicilio' ? direccion : null,
+        telefono: tipoEntrega === 'A domicilio' ? telefono : null,
       })
       .select('id')
       .single();
@@ -227,7 +230,7 @@ const HacerPedido: React.FC = () => {
 
     const pedidoId = pedidoData.id;
 
-    // 3. Insertar detalles del pedido con comentarios
+    // 3. Insertar detalles del pedido
     const detalles = carrito.map((item) => ({
       pedido_id: pedidoId,
       producto_id: item.producto.id,
@@ -245,12 +248,17 @@ const HacerPedido: React.FC = () => {
     }
 
     // Mostrar mensaje de éxito con el código
-    setSuccess(`Pedido realizado con éxito. Tu código para recoger es: ${codigo}`);
+    setSuccess(`Pedido realizado con éxito. Tu código es: ${codigo}. ${
+      tipoEntrega === 'A domicilio' ? 'Te lo llevaremos pronto.' : 'Pásalo a recoger cuando quieras.'
+    }`);
     setCarrito([]);
     setMetodoPago('');
+    setTipoEntrega('');
+    setDireccion('');
+    setTelefono('');
     setNombreCliente('');
     setCorreoCliente('');
-    window.scrollTo(0, 0); // Volver al inicio para asegurar que el mensaje sea visible
+    window.scrollTo(0, 0);
   };
 
   return (
@@ -265,7 +273,7 @@ const HacerPedido: React.FC = () => {
           <div className="mb-8 text-center bg-green-100 p-4 rounded-lg border border-green-300">
             <p className="text-green-700 text-xl md:text-2xl font-bold">{success}</p>
             <p className="text-green-600 text-sm mt-2">
-              Guarda este código, lo necesitarás para recoger tu pedido.
+              Guarda este código, lo necesitarás para recoger tu pedido o verificar la entrega.
             </p>
           </div>
         )}
@@ -275,7 +283,6 @@ const HacerPedido: React.FC = () => {
           {/* Productos */}
           <div className="bg-white p-6 rounded-xl shadow-xl">
             <h3 className="text-xl font-semibold text-gray-700 mb-4">Menú</h3>
-            {/* Filtro por categoría */}
             <div className="mb-4">
               <label className="block text-gray-700 font-medium mb-2">
                 Filtrar por Categoría
@@ -369,7 +376,7 @@ const HacerPedido: React.FC = () => {
               </div>
             )}
 
-            {/* Formulario de cliente y pago */}
+            {/* Formulario de cliente, entrega y pago */}
             <form onSubmit={handleSubmit} className="mt-6">
               <div className="mb-4">
                 <label
@@ -389,7 +396,7 @@ const HacerPedido: React.FC = () => {
               </div>
               <div className="mb-4">
                 <label
-                  htmlFor="correoCliente"
+                  htmlgliFor="correoCliente"
                   className="block text-sm font-medium text-gray-700"
                 >
                   Correo
@@ -403,6 +410,63 @@ const HacerPedido: React.FC = () => {
                   required
                 />
               </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tipo de Entrega
+                </label>
+                <select
+                  value={tipoEntrega}
+                  onChange={(e) =>
+                    setTipoEntrega(e.target.value as 'A domicilio' | 'Pasar a recoger' | '')
+                  }
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                >
+                  <option value="">Seleccionar</option>
+                  <option value="A domicilio">A domicilio</option>
+                  <option value="Pasar a recoger">Pasar a recoger</option>
+                </select>
+              </div>
+
+              {/* Campos adicionales para "A domicilio" */}
+              {tipoEntrega === 'A domicilio' && (
+                <div className="mb-4 space-y-4">
+                  <div>
+                    <label
+                      htmlFor="direccion"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Dirección
+                    </label>
+                    <input
+                      id="direccion"
+                      type="text"
+                      value={direccion}
+                      onChange={(e) => setDireccion(e.target.value)}
+                      placeholder="Ej. Calle 123, Colonia Centro"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="telefono"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Teléfono
+                    </label>
+                    <input
+                      id="telefono"
+                      type="tel"
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      placeholder="Ej. 123-456-7890"
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Método de Pago
@@ -420,7 +484,6 @@ const HacerPedido: React.FC = () => {
                 </select>
               </div>
 
-              {/* Información de transferencia */}
               {metodoPago === 'Transferencia' && metodoPagoInfo && (
                 <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
                   <p className="text-sm font-semibold text-indigo-900">
@@ -438,10 +501,9 @@ const HacerPedido: React.FC = () => {
                 </div>
               )}
 
-              {/* Mensaje de advertencia */}
               <div className="text-center text-sm text-yellow-600 mb-4">
                 <p>
-                  No olvides guardar tu código, ya que sin él no podrás recoger tus productos.
+                  No olvides guardar tu código, lo necesitarás para recoger tu pedido o verificar la entrega.
                 </p>
               </div>
 
@@ -457,7 +519,6 @@ const HacerPedido: React.FC = () => {
           </div>
         </div>
 
-        {/* Botones de navegación */}
         <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
           <button
             onClick={() => navigate('/menu')}
